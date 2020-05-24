@@ -1,0 +1,13 @@
+
+module iptables_save_chmod 1.0;
+
+require {
+	type iptables_t;
+	type etc_runtime_t;
+	class file setattr;
+}
+
+#============= iptables_t ==============
+
+#!!!! WARNING: 'etc_runtime_t' is a base type.
+allow iptables_t etc_runtime_t:file setattr;

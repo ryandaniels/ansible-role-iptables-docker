@@ -1,0 +1,53 @@
+---
+language: python
+# python: "2.7"
+services: docker
+
+# Use the new container infrastructure
+sudo: false
+
+# Install ansible
+addons:
+  apt:
+    packages:
+    - python-pip
+
+env:
+  global:
+    - ROLE_NAME: iptables_docker
+  matrix:
+    - MOLECULE_DISTRO: centos:7
+    # - MOLECULE_DISTRO: centos:8
+    # Fedora 29 has problem with ip6tables kernel module
+    # - MOLECULE_DISTRO: fedora:29
+    # - MOLECULE_DISTRO: fedora:30
+    # - MOLECULE_DISTRO: fedora:31
+    # - MOLECULE_DISTRO: fedora:32
+    # - MOLECULE_DISTRO: archlinux
+
+install:
+  # Install ansible
+  - pip install ansible ansible-lint 'molecule[docker]'
+
+  # Check ansible version
+  - ansible --version
+
+  # Create ansible.cfg with correct roles_path
+  - printf '[defaults]\nroles_path=../' >ansible.cfg
+
+before_script:
+  # Use actual Ansible Galaxy role name for the project directory.
+  - cd ../
+  - mv ansible-role-iptables-docker ryandaniels.$ROLE_NAME
+  - cd ryandaniels.$ROLE_NAME
+
+script:
+  # Basic role syntax check
+  - ansible-playbook tests/test.yml -i tests/inventory --syntax-check
+  - ansible-lint
+  # - molecule test
+  # - molecule test --destroy=never && molecule test --scenario-name second-change
+  # - molecule destroy
+
+# notifications:
+#   webhooks: https://galaxy.ansible.com/api/v1/notifications/

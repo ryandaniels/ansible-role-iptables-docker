@@ -1,0 +1,364 @@
+---
+- name: iptables Docker | Set Docker server IPs for allow list
+  set_fact:
+    iptables_docker_server_ip_allow_set: "{{ iptables_docker_server_ip_allow_set | default(groups['docker_hosts'] | map('extract', hostvars, ['ansible_host']) | list) }}" # noqa 204
+    cacheable: yes
+  when:
+    - iptables_docker_managed|bool
+  tags:
+    - iptables_docker
+    - iptables_docker_show_config
+    - iptables_config
+    - iptables_config_ipset
+
+- block:
+  - name: iptables Docker | Show iptables_docker_server_ip_allow_set for Docker server allow list
+    debug: var=iptables_docker_server_ip_allow_set
+  # - name: iptables Docker | Show groups['docker_hosts']
+  #   debug: var=groups['docker_hosts']
+  # - name: iptables Docker | Show IPs in docker_hosts group
+  #   debug: msg="{{ groups['docker_hosts'] | map('extract', hostvars, ['ansible_host']) | list }}"
+  - name: iptables Docker | Show iptables_docker_ip_allow_set
+    debug: var=iptables_docker_ip_allow_set
+  - name: iptables Docker | Show iptables_docker_external_network_adapter
+    debug: var=iptables_docker_external_network_adapter
+  - name: iptables Docker | Show iptables_docker_swarm_network_adapter
+    debug: var=iptables_docker_swarm_network_adapter
+  - name: iptables Docker | Show iptables_docker_global_ports_allow_tcp
+    debug: var=iptables_docker_global_ports_allow_tcp
+  - name: iptables Docker | Show iptables_docker_global_ports_allow_udp
+    debug: var=iptables_docker_global_ports_allow_udp
+  - name: iptables Docker | Show iptables_docker_swarm_ports_allow_tcp
+    debug: var=iptables_docker_swarm_ports_allow_tcp
+  - name: iptables Docker | Show iptables_docker_swarm_ports_allow_udp
+    debug: var=iptables_docker_swarm_ports_allow_udp
+  # - name: iptables Docker | iptables output (-nvL)
+  #   command: iptables -nvL --line-numbers
+  #   changed_when: false
+  #   register: stat_iptables_results
+  # - name: iptables Docker | iptables output (-nvL) results
+  #   debug: var=stat_iptables_results.stdout_lines
+  - name: pause
+    pause:
+      seconds: 10
+  when:
+    - iptables_docker_managed|bool
+    # - debug_enabled_default|bool
+    - iptables_docker_show_config|bool
+  tags:
+    - iptables_docker
+    - iptables_docker_show_config
+    - iptables_config
+    - iptables_config_ipset
+    - iptables_config_iptables
+
+#Not needed since this is now user IPs only
+# - name: iptables Docker | fail if iptables_docker_ip_allow_set not defined
+#   fail: msg="iptables_docker_ip_allow_set is not defined"
+#   when:
+#     - iptables_docker_managed|bool
+#     - not iptables_docker_ip_allow_set
+#   tags:
+#     - iptables_docker
+
+- name: iptables Docker | fail if iptables_docker_server_ip_allow_set not defined
+  fail: msg="iptables_docker_server_ip_allow_set is not defined"
+  when:
+    - iptables_docker_managed|bool
+    - not iptables_docker_server_ip_allow_set
+  tags:
+    - iptables_docker
+
+#Not needed since can be overwritten with iptables_docker_server_ip_allow_set
+# - name: iptables Docker | fail if host not in group 'docker_hosts'
+#   fail: msg="host is not in group 'docker_hosts'"
+#   when:
+#     - iptables_docker_managed|bool
+#     - "'docker_hosts' not in group_names"
+#   tags:
+#     - iptables_docker
+
+- name: iptables Docker | fail if iptables_docker_external_network_adapter has '*'
+  fail: msg="iptables_docker_external_network_adapter cannot have '*'"
+  when:
+    - iptables_docker_managed|bool
+    - '"*" in iptables_docker_external_network_adapter'
+  tags:
+    - iptables_docker
+
+- name: iptables Docker | fail if iptables_docker_swarm_network_adapter has '*'
+  fail: msg="iptables_docker_swarm_network_adapter cannot have '*'"
+  when:
+    - iptables_docker_managed|bool
+    - '"*" in iptables_docker_swarm_network_adapter'
+  tags:
+    - iptables_docker
+
+- name: iptables Docker | Check for problem services
+  command: systemctl show -p UnitFileState -p SubState {{ item }} warn=false
+  register: stat_service_bad
+  changed_when: false
+  # no_log: true
+# - debug: var=stat_service_bad.stdout_lines
+  with_items:
+    - "{{ iptables_docker_check_problem_service }}"
+  when:
+    - iptables_docker_managed|bool
+    - iptables_docker_check_problem_service_managed|bool
+  tags:
+    - iptables_docker
+    - iptables_docker_check_service
+
+# - debug: var=stat_service_bad.results
+#   when:
+#     - iptables_docker_managed|bool
+#     - iptables_docker_check_problem_service_managed|bool
+#   tags:
+#     - iptables_docker
+#     - iptables_docker_check_service
+
+- name: iptables Docker | Fail if specified problem service is running
+  fail:
+    msg: "{{ item.item }} service is running or enabled, and Docker can cause a problem with that service"
+  with_items: "{{ stat_service_bad.results }}"
+  when:
+    - iptables_docker_managed|bool
+    - iptables_docker_check_problem_service_managed|bool
+    - ("SubState=running" in item.stdout_lines) or ("UnitFileState=enabled" in item.stdout_lines)
+  tags:
+    - iptables_docker
+    - iptables_docker_check_service
+
+#Lock down firewalld
+- name: iptables Docker | Mask problem services
+  systemd:
+    name: "{{ item }}"
+    masked: yes
+  ignore_errors: true
+  with_items: "{{ iptables_docker_check_problem_service }}"
+  when:
+    - iptables_docker_managed|bool
+  tags:
+    - iptables_docker
+
+- name: iptables Docker | Ensure required packages are installed
+  package:
+    name: "{{ iptables_docker_packages|default([]) }}"
+    update_cache: yes
+    state: installed
+  environment: "{{ proxy_env }}"
+  when:
+    # - ansible_os_family == "RedHat"
+#    - ansible_distribution_major_version == '7'
+    - iptables_docker_managed|bool
+    - iptables_docker_managed_pkg|bool
+  tags:
+    - iptables_docker
+    - iptables_docker_pkg_install
+
+# mkdir -p /etc/sysconfig/ipset.d
+- name: iptables Docker | Create ipset config folder
+  file:
+    path: "{{ iptables_docker_ipset_config_dir }}"
+    state: directory
+  when: iptables_docker_managed|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_ipset
+
+- name: iptables Docker | Generate ipset config
+  template:
+    src: templates/ip_allow.set.j2
+    dest: "{{ iptables_docker_ipset_config_dir }}/ip_allow.set"
+    # validate: haproxy -f %s -c -q
+  # environment:
+  #   PATH: "/usr/sbin:/usr/local/sbin:/sbin:{{ install_haproxy_bin_dir }}"
+  register: stat_iptables_docker_copy_ipset
+  # notify:
+  #   - reload ipset
+  when: iptables_docker_managed|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_ipset
+
+- name: iptables Docker | Start ipset service
+  systemd:
+    name: ipset
+    state: started
+    enabled: yes
+  when:
+    - iptables_docker_managed|bool
+    - stat_iptables_docker_copy_ipset.changed or iptables_docker_copy_ipset_force|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_ipset
+
+- name: iptables Docker | Reload ipset
+  systemd:
+    name: ipset
+    state: reloaded
+  when:
+    - iptables_docker_managed|bool
+    - stat_iptables_docker_copy_ipset.changed or iptables_docker_copy_ipset_force|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_ipset
+
+#Change iptables config: /etc/sysconfig/iptables-config
+- name: iptables Docker | Modify iptables config
+  lineinfile:
+    dest: "{{ iptables_docker_iptables_config }}"
+    regexp: "{{ item.regex }}"
+    line: "{{ item.line }}"
+    backup: no
+  with_items:
+    - {regex: '^IPTABLES_SAVE_ON_STOP=.*', line: 'IPTABLES_SAVE_ON_STOP="yes"'}
+    - {regex: '^IPTABLES_SAVE_ON_RESTART=.*', line: 'IPTABLES_SAVE_ON_RESTART="yes"'}
+  when:
+    - iptables_docker_managed|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+
+#Problem when saving iptables a 2nd time. SELinux blocks it. Bug with iptables or iptables-services??
+#Used below as workaround to allow chmod to modify iptables.save file
+#To reproduce, restart iptables service after setting iptables config to save after restart/stop,
+#ausearch -m AVC,USER_AVC,SELINUX_ERR,USER_SELINUX_ERR -i|tail -55
+#grep "iptables.save" /var/log/audit/audit.log|tail | audit2allow -M iptables_save_chmod
+#or ausearch -c 'chmod' --raw | audit2allow -M iptables_save_chmod
+#semodule -i iptables_save_chmod.pp
+#https://bugs.centos.org/view.php?id=12648
+- name: iptables Docker | Copy file selinux_iptables_save_chmod.pp
+  copy:
+    src: "files/selinux_iptables_save_chmod.pp"
+    dest: "/root/selinux_iptables_save_chmod.pp"
+    mode: 0644
+  register: stat_iptables_selinux_iptables_save
+  when:
+    - ansible_selinux is defined
+    - ansible_selinux.status == 'enabled'
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+
+- name: iptables Docker | Fix SELinux permissions for iptables save and chmod
+  command: semodule -i /root/selinux_iptables_save_chmod.pp
+  when:
+    - ansible_selinux is defined
+    - ansible_selinux.status == 'enabled'
+    - stat_iptables_selinux_iptables_save.changed
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+#End workaround for SELinux and chmod/iptabes save issue on 2nd save (iptables.save file issue)
+
+- name: iptables Docker | Generate iptables config
+  template:
+    src: templates/iptables.j2
+    # dest: "{{ iptables_docker_iptables_config_dir }}/iptables"
+    dest: "~/ansible_iptables_docker-iptables"
+    # validate: iptables-restore -t < %s
+  # environment:
+  #   PATH: "/usr/sbin:/usr/local/sbin:/sbin"
+  register: stat_iptables_docker_copy_iptables
+  # notify:
+  #   - reload tables
+  when:
+    - iptables_docker_managed|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+
+#Ansible validate in template doesn't like "shell features" like pipes and <
+- name: iptables Docker | Validate iptables config
+  shell: iptables-restore -t < ~/ansible_iptables_docker-iptables
+  changed_when: false
+  when:
+    - iptables_docker_managed|bool
+    - stat_iptables_docker_copy_iptables.changed or iptables_docker_copy_iptables_force|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+
+#Moved inside iptables file
+# - name: Flush iptables
+#   iptables:
+#     chain: "{{ item }}"
+#     flush: yes
+#   with_items:  [ 'INPUT', 'DOCKER-USER', 'FILTERS' ]
+#   when: stat_iptables_docker_copy_iptables.changed
+
+- name: iptables Docker | iptables restore
+  shell: iptables-restore -n < ~/ansible_iptables_docker-iptables
+  # notify: iptables save
+  when:
+    - iptables_docker_managed|bool
+    - stat_iptables_docker_copy_iptables.changed or iptables_docker_copy_iptables_force|bool
+    - iptables_docker_start|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+
+#iptables -I INPUT -j FILTERS
+- name: Insert jump to FILTERS rule in INPUT at line 1
+  iptables:
+    chain: INPUT
+    jump: FILTERS
+    action: insert
+    rule_num: "1"
+  when:
+    - iptables_docker_managed|bool
+    - stat_iptables_docker_copy_iptables.changed or iptables_docker_copy_iptables_force|bool
+    - iptables_docker_start|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+
+#Only save these custom iptables rules. Remove anything Docker related since Docker needs to manage that.
+#Doesn't work - iptables clobbers everything when started/restarted! Must save all and enalbe iptables config to save on restart
+#Docker seems ok, it will remove old stuff / clobber it's own chains
+- block:
+  - name: iptables Docker | iptables save
+    # command: service iptables save warn=false # noqa 303
+    command: /usr/libexec/iptables/iptables.init save
+    # shell: |
+    #   set -o pipefail
+    #   iptables-save -t filter \
+    #   |grep -Ev "FORWARD |OUTPUT |DOCKER |DOCKER-INGRESS |DOCKER-ISOLATION|INPUT -p udp " \
+    #   > {{ iptables_docker_iptables_config_save | quote }}
+  - name: iptables Docker | iptables validate save
+    shell: iptables-restore -t < {{ iptables_docker_iptables_config_save | quote }}
+    changed_when: false
+  when:
+    - iptables_docker_managed|bool
+    - stat_iptables_docker_copy_iptables.changed or iptables_docker_copy_iptables_force|bool
+    - iptables_docker_start|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+
+- name: iptables Docker | Start iptables service
+  systemd:
+    name: iptables
+    state: started
+    enabled: yes
+  when:
+    - iptables_docker_managed|bool
+    - stat_iptables_docker_copy_iptables.changed or iptables_docker_copy_iptables_force|bool
+    - iptables_docker_start|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables

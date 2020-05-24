@@ -1,0 +1,57 @@
+*filter
+:INPUT ACCEPT [0:0]
+:DOCKER-USER - [0:0]
+:FILTERS - [0:0]
+#Can't flush INPUT. wipes out docker swarm encrypted overlay rules
+#-F INPUT
+#Use ansible task instead to add -I INPUT -j FILTERS once to top
+#-I INPUT -j FILTERS
+#-A INPUT -j RETURN
+-F DOCKER-USER
+#Needed to allow outbound traffic from containers
+-A DOCKER-USER -m state --state RELATED,ESTABLISHED -j RETURN
+#If wildcard used to block all network interfaces, this is needed to allow docker traffic.
+-A DOCKER-USER -i {{ iptables_docker_swarm_bridge_name }} -j RETURN
+-A DOCKER-USER -s {{ iptables_docker_swarm_bridge_ips }} -j RETURN
+-A DOCKER-USER -i {{ iptables_docker_bridge_name }} -j RETURN
+-A DOCKER-USER -s {{ iptables_docker_bridge_ips }} -j RETURN
+{% if iptables_docker_swarm_ports_allow_tcp is defined and iptables_docker_swarm_ports_allow_tcp %}
+#Below Docker tcp ports open to everyone
+-A DOCKER-USER -p tcp -m tcp -m multiport --dports {% for ports in iptables_docker_swarm_ports_allow_tcp|sort %}{{ ports }}{% if not loop.last %},{% endif %}{% endfor %} -j RETURN
+{% endif %}
+{% if iptables_docker_swarm_ports_allow_udp is defined and iptables_docker_swarm_ports_allow_udp %}
+#Below Docker tcp ports open to everyone
+-A DOCKER-USER -p udp -m udp -m multiport --dports {% for ports in iptables_docker_swarm_ports_allow_udp|sort %}{{ ports }}{% if not loop.last %},{% endif %}{% endfor %} -j RETURN
+{% endif %}
+{% if iptables_docker_swarm_network_adapter is defined and "+" in iptables_docker_swarm_network_adapter %}
+-A DOCKER-USER -m set ! --match-set ip_allow src -j DROP
+{% else %}
+{% for adapter in iptables_docker_swarm_network_adapter -%}
+-A DOCKER-USER -i {{ adapter }} -m set ! --match-set ip_allow src -j DROP
+{% endfor %}
+{% endif %}
+-A DOCKER-USER -j RETURN
+-F FILTERS
+#Because Docker Swarm encrypted overlay network just appends rules to INPUT. This has to be at top to return to INPUT
+-A FILTERS -p udp -m policy --dir in --pol ipsec -m udp -m set --match-set ip_allow src --dport 4789 -j RETURN
+-A FILTERS -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A FILTERS -p icmp -j ACCEPT
+-A FILTERS -i lo -j ACCEPT
+{% if iptables_docker_global_ports_allow_tcp is defined and iptables_docker_global_ports_allow_tcp %}
+#Below OS tcp ports open to everyone
+-A FILTERS -p tcp -m state --state NEW -m tcp -m multiport --dports {% for ports in iptables_docker_global_ports_allow_tcp|sort %}{{ ports }}{% if not loop.last %},{% endif %}{% endfor %} -j ACCEPT
+{% endif %}
+{% if iptables_docker_global_ports_allow_udp is defined and iptables_docker_global_ports_allow_udp %}
+#Below OS udp ports open to everyone
+-A FILTERS -p udp -m udp -m multiport --dports {% for ports in iptables_docker_global_ports_allow_udp|sort %}{{ ports }}{% if not loop.last %},{% endif %}{% endfor %} -j ACCEPT
+{% endif %}
+{% if iptables_docker_external_network_adapter is defined and "+" in iptables_docker_external_network_adapter %}
+-A FILTERS -m set ! --match-set ip_allow src -j DROP
+{% else %}
+{% for adapter in iptables_docker_external_network_adapter -%}
+-A FILTERS -i {{ adapter }} -m set ! --match-set ip_allow src -j DROP
+{% endfor %}
+{% endif %}
+-A FILTERS -j RETURN
+COMMIT
+# {{ ansible_managed }}

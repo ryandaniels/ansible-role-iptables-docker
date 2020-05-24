@@ -1,0 +1,88 @@
+---
+debug_enabled_default: false
+proxy_env: []
+
+iptables_docker_managed: false
+iptables_docker_show_config: true
+iptables_docker_check_problem_service_managed: true
+iptables_docker_check_problem_service:
+  - firewalld.service
+iptables_docker_start: true
+iptables_docker_managed_pkg: true
+iptables_docker_packages:
+  - iptables
+  - iptables-services
+  - ipset
+  - ipset-service
+  - policycoreutils-python #required for semodule
+iptables_docker_copy_ipset_force: false
+iptables_docker_copy_iptables_force: false
+iptables_docker_iptables_config_save: /etc/sysconfig/iptables
+iptables_docker_iptables_config: /etc/sysconfig/iptables-config
+iptables_docker_ipset_config_dir: /etc/sysconfig/ipset.d
+iptables_docker_ipset_maxelem: 65536
+
+# Optional override. If not set, IPs will be determined from docker_hosts group in Ansible inventory
+# iptables_docker_server_ip_allow_set:
+#   - 192.168.100.100
+#   - 192.168.100.101
+#   - 192.168.100.102
+#   - 192.168.100.103
+
+# IPs allowed to use Docker containers exposed ports and server's other processes' exposed ports
+iptables_docker_ip_allow_set: []
+# iptables_docker_ip_allow_set:
+#   - 192.168.100.1
+#   - 192.168.101.0/24
+#   - 192.168.102.0/24
+
+# External network adapter to restrict. Only listed adapters will be blocked. Others will be allowed through. Defaults to block all (with '+').
+# If you want to restrict only specific interface use exact name
+# If you want to restrict all interfaces of the same type, use "interface+" to match every interface, since + is the wildcard for iptables.
+# Eg. To restrict the ethX interfaces, use "eth+". "eth+" is a wildcard for anything starting with eth
+# DO NOT use "*". This is not a wildcard and matches nothing!
+# The less here the better. Safer to block all ('+') but if cannot, add network adapters with high traffic first.
+# local (lo) is not needed here.
+iptables_docker_external_network_adapter:
+  - "+" #Wildcard for everything
+  # - "eth+"
+  # - "enp0s+"
+  # - "wlp1s+"
+  # - "*" #Bad, does not work. * is not a wildcard for iptables!
+
+# "Global" Ports to allow. Ports here will allow all tcp traffic to these ports from iptables level.
+# Only for ports on OS, not for Docker containers.
+iptables_docker_global_ports_allow_tcp:
+  - 22                   # SSH
+
+# "Global" Ports to allow. Ports here will allow all udp traffic to these ports from iptables level.
+# Only for ports on OS, not for Docker containers.
+iptables_docker_global_ports_allow_udp: []
+
+# Network interface for Docker. Probably the same as external network adapter and doesn't need to change.
+iptables_docker_swarm_network_adapter: "{{ iptables_docker_external_network_adapter }}"
+# iptables_docker_swarm_network_adapter:
+#   - "+" #Wildcard for everything
+#   # - "eth+"
+
+# Only add Docker container tcp ports you want open to everyone. For Docker and Docker Swarm.
+# If using non-Swarm, consider (also) binding a port to an internal IP for better security.
+# If using Swarm, consider using specific IPs for Docker communication
+# Eg. Docker: docker swarm init --advertise-addr 192.168.100.100 --listen-addr=192.168.100.100 --data-path-addr=192.168.100.100
+# Docker Swarm ports aren't needed here. 
+iptables_docker_swarm_ports_allow_tcp: []
+# iptables_docker_swarm_ports_allow_tcp:
+#   - 9000
+
+# Only add Docker container udp ports you want open to everyone. For Docker and Docker Swarm.
+# Docker Swarm ports aren't needed here.
+iptables_docker_swarm_ports_allow_udp: []
+
+# You probably don't need to change anything below this line
+# Docker bridge network name (docker0), and IP range (for DOCKER-USER iptables source allow)
+iptables_docker_bridge_name: docker0
+iptables_docker_bridge_ips: 172.17.0.0/16
+
+# Docker Swarm bridge network IP range (docker_gwbridge) (for DOCKER-USER iptables source allow)
+iptables_docker_swarm_bridge_name: docker_gwbridge
+iptables_docker_swarm_bridge_ips: 172.18.0.0/16

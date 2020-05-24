@@ -1,0 +1,109 @@
+---
+image: quay.io/ansible/molecule:3.0.2
+services:
+  - name: docker:dind
+    entrypoint: ["dockerd-entrypoint.sh"]
+
+stages:
+  - tests
+
+variables:
+  GIT_STRATEGY: clone
+  # DOCKER_HOST: "tcp://localhost:2375"
+  DOCKER_TLS_CERTDIR: ""
+
+.molecule_test:
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    PY_COLORS: 1
+  tags:
+    - docker
+  before_script:
+    - export ROLE_NAME=iptables_docker
+    # - apk update && apk add --no-cache py3-pip
+    - python3 -m pip install ansible-lint==4.2.0
+    - docker -v
+    - python3 --version
+    - ansible --version
+    - molecule --version
+    - ansible-lint --version
+    # Use actual Ansible Galaxy role name for the project directory.
+    - cd ../
+    # - mv ansible-role-$ROLE_NAME ryandaniels.$ROLE_NAME
+    # - cd ryandaniels.$ROLE_NAME
+    - ln -s ansible-role-$ROLE_NAME ryandaniels.$ROLE_NAME
+    - cd ryandaniels.$ROLE_NAME
+  script:
+    - ansible-lint
+    # - molecule test #--destroy=never && molecule test --scenario-name second-change
+    # - molecule destroy
+    # - sleep 3600
+  rules:
+      #Enable the "Merge pipelines will try to validate the post-merge result prior to merging" 
+      #option at Settings > General > Merge requests in your project.
+    # - if: $CI_MERGE_REQUEST_ID
+    #   when: never
+    - changes:
+      - "**/*.{md,rst,gitignore}"
+      - "meta/*"
+      when: never
+    - when: always
+
+molecule-centos7:
+  stage: tests
+  extends: .molecule_test
+  variables:
+    MOLECULE_DISTRO: "centos:7"
+
+# molecule-centos8:
+#   stage: tests
+#   extends: .molecule_test
+#   variables:
+#     MOLECULE_DISTRO: "centos:8"
+
+# molecule-fedora31:
+#   stage: tests
+#   extends: .molecule_test
+#   variables:
+#     MOLECULE_DISTRO: "fedora:31"
+
+#much slower but works
+# image: docker:git
+# services:
+#   - docker:dind
+
+# stages:
+#   - tests
+
+# before_script:
+#   - export ROLE_NAME=firewalld
+#   - apk update && apk add --no-cache docker
+#     python3-dev py3-pip docker gcc git curl build-base
+#     autoconf automake py3-cryptography linux-headers
+#     musl-dev libffi-dev openssl-dev openssh
+#   - python3 -m pip install ansible molecule docker ansible-lint
+#   - docker -v
+#   - python3 --version
+#   - ansible --version
+#   - molecule --version
+#   - ansible-lint --version
+#   # Use actual Ansible Galaxy role name for the project directory.
+#   - cd ../
+#   # - mv ansible-role-$ROLE_NAME ryandaniels.$ROLE_NAME
+#   # - cd ryandaniels.$ROLE_NAME
+#   - ln -s ansible-role-$ROLE_NAME ryandaniels.$ROLE_NAME
+#   - cd ryandaniels.$ROLE_NAME
+
+# molecule-centos7:
+#   stage: tests
+#   script:
+#     - export MOLECULE_DISTRO="centos:7"
+#     - molecule test --destroy=never && molecule test --scenario-name second-change
+#     - molecule destroy
+
+# molecule-fedora31:
+#   stage: tests
+#   script:
+#     - export MOLECULE_DISTRO="fedora:31"
+#     - molecule test --destroy=never && molecule test --scenario-name second-change
+#     - molecule destroy

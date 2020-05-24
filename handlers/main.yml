@@ -1,0 +1,6 @@
+---
+# - name: reload ipset
+#   systemd:
+#     name: ipset
+#     state: reloaded
+#   when: iptables_docker_managed|bool
