@@ -49,5 +49,5 @@ script:
   # - molecule test --destroy=never && molecule test --scenario-name second-change
   # - molecule destroy
 
-# notifications:
-#   webhooks: https://galaxy.ansible.com/api/v1/notifications/
+notifications:
+  webhooks: https://galaxy.ansible.com/api/v1/notifications/
