@@ -242,6 +242,7 @@
   when:
     - ansible_selinux is defined
     - ansible_selinux.status == 'enabled'
+    - iptables_docker_managed|bool
   tags:
     - iptables_docker
     - iptables_config
@@ -253,6 +254,7 @@
     - ansible_selinux is defined
     - ansible_selinux.status == 'enabled'
     - stat_iptables_selinux_iptables_save.changed
+    - iptables_docker_managed|bool
   tags:
     - iptables_docker
     - iptables_config
