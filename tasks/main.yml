@@ -1,4 +1,21 @@
 ---
+- name: Add Ubuntu override variables
+  include_vars: "ubuntu.yml"
+  when:
+    - ansible_distribution == "Ubuntu"
+    - iptables_docker_managed|bool
+  tags:
+   - always
+
+- name: Add Ubuntu 20.04 override variables
+  include_vars: "ubuntu2004.yml"
+  when:
+    - ansible_distribution == "Ubuntu"
+    - ansible_distribution_version == "20.04"
+    - iptables_docker_managed|bool
+  tags:
+   - always
+
 - name: iptables Docker | Set Docker server IPs for allow list
   set_fact:
     iptables_docker_server_ip_allow_set: "{{ iptables_docker_server_ip_allow_set | default(groups['docker_hosts'] | map('extract', hostvars, ['ansible_host']) | list) }}" # noqa 204
@@ -145,11 +162,11 @@
   package:
     name: "{{ iptables_docker_packages|default([]) }}"
     update_cache: yes
-    state: installed
+    state: present
   environment: "{{ proxy_env }}"
   when:
     # - ansible_os_family == "RedHat"
-#    - ansible_distribution_major_version == '7'
+    # - ansible_distribution_major_version == '7'
     - iptables_docker_managed|bool
     - iptables_docker_managed_pkg|bool
   tags:
@@ -161,7 +178,8 @@
   file:
     path: "{{ iptables_docker_ipset_config_dir }}"
     state: directory
-  when: iptables_docker_managed|bool
+  when:
+    - iptables_docker_managed|bool
   tags:
     - iptables_docker
     - iptables_config
@@ -170,14 +188,15 @@
 - name: iptables Docker | Generate ipset config
   template:
     src: templates/ip_allow.set.j2
-    dest: "{{ iptables_docker_ipset_config_dir }}/ip_allow.set"
+    dest: "{{ iptables_docker_ipset_config_dir }}/{{ iptables_docker_ipset_save_file }}"
     # validate: haproxy -f %s -c -q
   # environment:
   #   PATH: "/usr/sbin:/usr/local/sbin:/sbin:{{ install_haproxy_bin_dir }}"
   register: stat_iptables_docker_copy_ipset
   # notify:
   #   - reload ipset
-  when: iptables_docker_managed|bool
+  when:
+    - iptables_docker_managed|bool
   tags:
     - iptables_docker
     - iptables_config
@@ -189,6 +208,8 @@
     state: started
     enabled: yes
   when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == '7'
     - iptables_docker_managed|bool
     - stat_iptables_docker_copy_ipset.changed or iptables_docker_copy_ipset_force|bool
   tags:
@@ -201,12 +222,44 @@
     name: ipset
     state: reloaded
   when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == '7'
     - iptables_docker_managed|bool
     - stat_iptables_docker_copy_ipset.changed or iptables_docker_copy_ipset_force|bool
   tags:
     - iptables_docker
     - iptables_config
     - iptables_config_ipset
+
+#source: https://packages.ubuntu.com/focal/ipset-persistent
+- name: iptables Docker | Copy ipset plugins for netfilter (Ubuntu <= 18.04)
+  copy:
+    src: "files/ubuntu/iptables-persistent_1.0.14/plugins/{{ item }}"
+    dest: "/usr/share/netfilter-persistent/plugins.d/{{ item }}"
+    mode: 0755
+  register: stat_iptables_ubuntu_ipset_persistent_files
+  with_items:
+    - 10-ipset
+    - 40-ipset
+  when:
+    - ansible_distribution == "Ubuntu"
+    - ansible_distribution_version <= "18.04"
+    - iptables_docker_managed|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
+
+- name: iptables Docker | Reload ipset (Ubuntu)
+  command: /usr/sbin/netfilter-persistent reload
+  when:
+    - ansible_distribution == "Ubuntu"
+    - iptables_docker_managed|bool
+    - stat_iptables_docker_copy_ipset.changed or iptables_docker_copy_ipset_force|bool
+  tags:
+    - iptables_docker
+    - iptables_config
+    - iptables_config_iptables
 
 #Change iptables config: /etc/sysconfig/iptables-config
 - name: iptables Docker | Modify iptables config
@@ -219,6 +272,8 @@
     - {regex: '^IPTABLES_SAVE_ON_STOP=.*', line: 'IPTABLES_SAVE_ON_STOP="yes"'}
     - {regex: '^IPTABLES_SAVE_ON_RESTART=.*', line: 'IPTABLES_SAVE_ON_RESTART="yes"'}
   when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == '7'
     - iptables_docker_managed|bool
   tags:
     - iptables_docker
@@ -240,6 +295,8 @@
     mode: 0644
   register: stat_iptables_selinux_iptables_save
   when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == '7'
     - ansible_selinux is defined
     - ansible_selinux.status == 'enabled'
     - iptables_docker_managed|bool
@@ -251,6 +308,8 @@
 - name: iptables Docker | Fix SELinux permissions for iptables save and chmod
   command: semodule -i /root/selinux_iptables_save_chmod.pp
   when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == '7'
     - ansible_selinux is defined
     - ansible_selinux.status == 'enabled'
     - stat_iptables_selinux_iptables_save.changed
@@ -333,7 +392,7 @@
 - block:
   - name: iptables Docker | iptables save
     # command: service iptables save warn=false # noqa 303
-    command: /usr/libexec/iptables/iptables.init save
+    command: "{{ iptables_docker_iptables_save_cmd }}"
     # shell: |
     #   set -o pipefail
     #   iptables-save -t filter \
@@ -351,9 +410,9 @@
     - iptables_config
     - iptables_config_iptables
 
-- name: iptables Docker | Start iptables service
+- name: iptables Docker | Start iptables (persistent) service
   systemd:
-    name: iptables
+    name: "{{ iptables_docker_iptables_persistent_svc }}"
     state: started
     enabled: yes
   when:

@@ -1,0 +1,62 @@
+#!/bin/sh
+
+# This file is part of netfilter-persistent
+# (was iptables-persistent)
+# Copyright (C) 2018, gustavo panizzo <gfa@zumbi.com.ar>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+
+# This script only implement flush of rules as ipset have to flushed after
+# there are no more references to it (iptables rules calling them)
+
+set -e
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Source configuration
+if [ -f "/etc/default/netfilter-persistent" ]; then
+    . /etc/default/netfilter-persistent
+fi
+
+# Create the ipsets and populate them
+load_sets ()
+{
+    :
+}
+
+# Save current contents of the ipsets to file
+save_sets ()
+{
+    :
+}
+
+# flush sets
+flush_sets ()
+{
+    ipset destroy
+}
+
+
+case "$1" in
+start|restart|reload|force-reload)
+    load_sets
+    ;;
+save)
+    save_sets
+    ;;
+stop)
+    # While it makes sense to stop (delete) ipsets we keep the same
+    # semanthics as ip(6)?tables rules
+    echo "Automatic flushing disabled, use \"flush\" instead of \"stop\""
+    ;;
+flush)
+    flush_sets
+    ;;
+*)
+    echo "Usage: $0 {start|restart|reload|force-reload|save|flush}" >&2
+    exit 1
+    ;;
+esac

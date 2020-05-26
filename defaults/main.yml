@@ -15,11 +15,15 @@ iptables_docker_packages:
   - ipset
   - ipset-service
   - policycoreutils-python #required for semodule
+
 iptables_docker_copy_ipset_force: false
 iptables_docker_copy_iptables_force: false
+iptables_docker_iptables_persistent_svc: iptables
+iptables_docker_iptables_save_cmd: "/usr/libexec/iptables/iptables.init save"
 iptables_docker_iptables_config_save: /etc/sysconfig/iptables
 iptables_docker_iptables_config: /etc/sysconfig/iptables-config
 iptables_docker_ipset_config_dir: /etc/sysconfig/ipset.d
+iptables_docker_ipset_save_file: ip_allow.set
 iptables_docker_ipset_maxelem: 65536
 
 # Optional override. If not set, IPs will be determined from docker_hosts group in Ansible inventory

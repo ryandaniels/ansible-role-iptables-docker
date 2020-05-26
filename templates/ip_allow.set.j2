@@ -1,6 +1,10 @@
 # Recreate the ipset if needed, and flush all entries
 create -exist ip_allow hash:ip family inet hashsize 1024 maxelem {{ iptables_docker_ipset_maxelem }}
-#flush
+
+{% if ansible_distribution == "Ubuntu" %}
+flush
+{% endif %}
+
 # Give access to specific ips
 # add ip_allow 192.168.100.0/24
 # add ip_allow 192.168.101.0/24

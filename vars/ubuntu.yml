@@ -1,0 +1,13 @@
+---
+iptables_docker_packages:
+  - iptables
+  - iptables-persistent
+  - netfilter-persistent
+  - ipset
+  # - ipset-persistent
+
+iptables_docker_ipset_config_dir: /etc/iptables
+iptables_docker_ipset_save_file: ipsets
+iptables_docker_iptables_persistent_svc: netfilter-persistent
+iptables_docker_iptables_save_cmd: "/usr/sbin/netfilter-persistent save"
+iptables_docker_iptables_config_save: /etc/iptables/rules.v4

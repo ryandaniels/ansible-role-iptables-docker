@@ -9,6 +9,10 @@ galaxy_info:
     - name: EL
       versions:
         - 7
+    - name: Ubuntu
+      versions:
+      - bionic
+      - focal
   galaxy_tags:
     - iptables
     - docker

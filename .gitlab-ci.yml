@@ -31,7 +31,7 @@ variables:
     - cd ../
     # - mv ansible-role-$ROLE_NAME ryandaniels.$ROLE_NAME
     # - cd ryandaniels.$ROLE_NAME
-    - ln -s ansible-role-$ROLE_NAME ryandaniels.$ROLE_NAME
+    - ln -s ansible-role-iptables-docker ryandaniels.$ROLE_NAME
     - cd ryandaniels.$ROLE_NAME
   script:
     - ansible-lint

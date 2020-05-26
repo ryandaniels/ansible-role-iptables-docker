@@ -14,7 +14,11 @@ There could be unknown problems with this.. use at your own risk!
 See also: <https://ryandaniels.ca/blog/secure-docker-with-iptables-firewall-and-ansible/>  
 And about Docker's use of the INPUT chain: <https://ryandaniels.ca/blog/docker-iptables-input-chain/>
 
-Currently tested and working on CentOS/RHEL 7.  
+Currently tested and working on:
+
+* CentOS/RHEL 7
+* Ubuntu 18.04
+* Ubuntu 20.04
 
 ## Features
 
@@ -82,6 +86,8 @@ Tested in normal Docker mode, and with a 3 node Docker Swarm cluster.
 ## Distros tested
 
 * CentOS: 7.7, 7.8
+* Ubuntu 18.04
+* Ubuntu 20.04
 
 ## Dependencies
 
@@ -422,7 +428,7 @@ List iptables that are active:
 iptables -nvL --line-numbers
 ```
 
-Misc useful commands:
+Misc CentOS/RHEL useful commands:
 
 ```bash
 cat /etc/sysconfig/ipset.d/ip_allow.set
@@ -439,7 +445,20 @@ iptables -S DOCKER-USER
 iptables -S FILTERS
 ```
 
-## Manual Commands
+Misc Ubuntu useful commands:
+
+```bash
+vi /etc/iptables/ipsets
+#Manually add 'flush' before add, if removing IPs manually.
+
+/usr/sbin/netfilter-persistent reload
+
+cat /etc/iptables/ipsets
+
+cat /etc/iptables/rules.v4
+```
+
+## Manual Commands (CentOS/RHEL)
 
 Check what iptables rules you already have. Make note in case they are lost!
 
@@ -566,7 +585,7 @@ Don't miss the Warnings from above! Especially about SELinux.
 * [x] add automatic list of docker IPs in allowed list (uses IPs from inventory group docker_hosts)
 * [x] Change auto Docker server trusted IPs so can override
 * [x] confirm "when" and "tags" are ok
-* [ ] Ubuntu? Ubuntu doesn't have iptables-services or ipset-service. has iptables-persistent and ipset-? Easy to add ufw support?
+* [x] Ubuntu? Ubuntu doesn't have iptables-services or ipset-service. has iptables-persistent and ipset-? No ufw support
 * [ ] ipv6?? This is for ipv4 only
 * [x] test TCP, UDP Docker container and OS port work
 * [x] test outound traffic from Docker containers work
