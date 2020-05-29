@@ -65,7 +65,7 @@ Impact: Saving the iptables rules a 2nd time will silently fail.
 Workaround has been added so SELinux allows chmod to interact with the iptables.save file.  
 Alternatively you could disable SELinux, but that's not recommended.  
 Bug report: <https://bugs.centos.org/view.php?id=12648>  
-See below for more details about manually performing the workaround.  
+See [below](#selinux-manual-workaround-for-iptables-and-chmod) for more details about manually performing the workaround.  
 
 **WARNING**:  
 Make sure you test in non-production first, I cannot make any guarantees or held responsible.  
@@ -407,14 +407,15 @@ Number of entries: 3
 
 Bug details: <https://bugs.centos.org/view.php?id=12648>
 
-The problem is when saving iptables a 2nd time, SELinux blocks it since chmodhas a problem with the iptables.save file.
+The problem is when saving iptables a 2nd time, SELinux blocks it since chmod has a problem with the iptables.save file.
 Use below as workaround to allow chmod to modify iptables.save file if not using the Ansible role.  
 To reproduce, restart iptables service after setting iptables config to save after restart/stop,
 
 ```bash
+yum install audit policycoreutils policycoreutils-python
 ausearch -m AVC,USER_AVC,SELINUX_ERR,USER_SELINUX_ERR -i|tail -55
-grep "iptables.save" /var/log/audit/audit.log|tail | audit2allow -M iptables_save_chmod
-#or ausearch -c 'chmod' --raw | audit2allow -M iptables_save_chmod
+ausearch -c 'chmod' --raw | audit2allow -M iptables_save_chmod
+#or grep "iptables.save" /var/log/audit/audit.log|tail | audit2allow -M iptables_save_chmod
 semodule -i iptables_save_chmod.pp
 ```
 
