@@ -80,6 +80,7 @@ Docker Engine - Community Edition version:
 
 * 19.03.8
 * 19.03.9
+* 19.03.12
 
 Tested in normal Docker mode, and with a 3 node Docker Swarm cluster.  
 
@@ -505,7 +506,7 @@ See what ipset has in it's loaded configuration:
 ipset list | head
 ```
 
-iptables rules being added (by default), and command to append them into iptables rules:
+iptables rules being added (by default port 22 is open to everyone):
 
 ```iptables
 cat > ansible_iptables_docker-iptables << 'EOF'
@@ -571,11 +572,92 @@ systemctl enable iptables
 If you want to customize the iptables rules to allow more ports to be open to everyone, just add the port to the appropriate rule in the iptables file (tcp or udp), then re-run the same commands from above:
 
 ```bash
-iptables-restore -n < iptables-rules.txt
+iptables-restore -n < ansible_iptables_docker-iptables
 /usr/libexec/iptables/iptables.init save
 ```
 
-Don't miss the Warnings from above! Especially about SELinux.
+Don't miss the [Warnings](#warnings) from above! Especially about SELinux.
+
+## Manual Commands (Ubuntu 20.04)
+
+Check what iptables rules you already have. Make note in case they are lost!  
+Ubuntu 18.04 is almost the same. Except the `ipset-persistent` package doesn't exist in Ubuntu 18.04, so omit that package and copy the files from `files/ubuntu/iptables-persistent*/plugins/*-ipset` to `/usr/share/netfilter-persistent/plugins.d/`.  
+
+```bash
+iptables -nvL --line-numbers
+```
+
+Install required packages:
+
+```bash
+apt install iptables iptables-persistent netfilter-persistent ipset ipset-persistent
+```
+
+Configure ipset with your server IPs and other trusted IPs:
+
+```bash
+mkdir -p /etc/iptables
+cat > /etc/iptables/ipsets  << 'EOF'
+create -exist ip_allow hash:ip family inet hashsize 1024 maxelem 65536
+flush
+add ip_allow 192.168.1.123
+add ip_allow 192.168.101.0/24
+add ip_allow 192.168.102.0/24
+EOF
+```
+
+Reload ipset:
+
+```bash
+/usr/sbin/netfilter-persistent reload
+```
+
+See what ipset has in it's loaded configuration:
+
+```bash
+ipset list | head
+```
+
+iptables rules being added (by default port 22 is open to everyone):
+
+```iptables
+Use same command as above for CentOS/RHEL.
+```
+
+Use iptables-restore to add the above rules into iptables. The very important flag is -n. That makes sure we don't flush the iptables rules if we have rules already in Docker (or Docker Swarm).
+
+```bash
+iptables-restore -n < ansible_iptables_docker-iptables
+```
+
+Next, add a rule to the INPUT chain, so we start using the new rules in FILTERS. It has to be at the top, and only needs to be added once:
+
+```bash
+iptables -I INPUT 1 -j FILTERS
+```
+
+Save the iptables rules:
+
+```bash
+/usr/sbin/netfilter-persistent save
+```
+
+Start and Enable the iptables service:
+
+```bash
+systemctl status netfilter-persistent
+systemctl start netfilter-persistent
+systemctl enable netfilter-persistent
+```
+
+If you want to customize the iptables rules to allow more ports to be open to everyone, just add the port to the appropriate rule in the iptables file (tcp or udp), then re-run the same commands from above:
+
+```bash
+iptables-restore -n < ansible_iptables_docker-iptables
+/usr/sbin/netfilter-persistent save
+```
+
+Don't miss the [Warnings](#warnings) from above!
 
 ## TODO
 

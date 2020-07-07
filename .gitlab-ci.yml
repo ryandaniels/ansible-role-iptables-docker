@@ -39,10 +39,13 @@ variables:
     # - molecule destroy
     # - sleep 3600
   rules:
-      #Enable the "Merge pipelines will try to validate the post-merge result prior to merging" 
-      #option at Settings > General > Merge requests in your project.
-    # - if: $CI_MERGE_REQUEST_ID
-    #   when: never
+    #Enable the "Merge pipelines will try to validate the post-merge result prior to merging" 
+    #option at Settings > General > Merge requests in your project.
+    - if: $CI_MERGE_REQUEST_ID
+      when: always
+    #Needed so can manually run pipeline from web gui
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: always
     - changes:
       - "**/*.{md,rst,gitignore}"
       - "meta/*"
